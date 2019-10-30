@@ -7,6 +7,7 @@ import os
 import sys
 import threading
 from queue import Queue
+import socket
 
 '''
 使用方式：
@@ -28,6 +29,11 @@ from queue import Queue
 
 
 queue = Queue(100)
+titles = []
+total = 0
+lock = threading.Lock()
+socket.setdefaulttimeout(5) #默认下载30分钟，如果30分钟下载
+
 headers = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/55.0.2883.87 Safari/537.36',
     'Host': 'api.bilibili.com',
@@ -44,7 +50,9 @@ class Product(threading.Thread):
         self.end_p = end_p
 
     def run(self):
+        global total
         videos = self.query_vedio_info(self.aid)
+        total = len(videos)
         for video in videos:
             #首先判断video是否在判断
             if self.start_p is not None and self.start_p > video['num']:
@@ -58,6 +66,9 @@ class Product(threading.Thread):
                 if video['num'] < 100 else str(video['num'])
             start_url = 'https://api.bilibili.com/x/web-interface/view?aid=%s/?p=%s' % (self.aid, video['num'])
             print('生产者：%s, 开始生产: %s' % (threading.current_thread(), video['num']))
+            lock.acquire()
+            list.append(pre_title+'_'+video['title'])
+            lock.release()
             queue.put({
                 'title': pre_title+'_'+video['title'],
                 'ref': start_url,
@@ -95,20 +106,26 @@ class Consumer(threading.Thread):
 
     def run(self):
         while True:
+            record = None
             try:
+                record = queue.get(timeout=20)
+            except Exception:
                 record = None
-                try:
-                    record = queue.get(timeout=20)
-                except Exception:
-                    record = None
 
-                if record is None:
-                    print('消费者%s, 消费完成' % threading.current_thread())
-                    break
+            if record is None:
+                print('消费者%s, 消费完成' % threading.current_thread())
+                break
+
+            try:
                 self.start_time = time.time()
                 self.down_video(record['url'], record['title'], record['ref'], record['aid'])
                 print('消费者%s，下载视频P%s完成' % (threading.current_thread(), record['title']))
+                lock.acquire()
+                titles.remove(record['title'])
+                lock.release()
             except:
+                if record is not None:
+                    queue.put(record)
                 print('counser %s error' % threading.current_thread())
 
     def schedule_cmd(self, blocknum, blocksize, totalsize):
@@ -178,3 +195,14 @@ if __name__ == '__main__':
     Product(video_id, name='product', start_p=17, end_p=17).start()
     for x in range(10):
         Consumer(name='consumer_'+str(x)).start()
+
+    while True:
+        if len(titles) == 0:
+            print("下载任务完成")
+            break
+        precent = (total-len(titles))/total
+        print("下载进度：%.2f%%" % (precent*100))
+
+        if precent > 0.7 :
+            print("正在下载视频：%s", ' '.join(titles))
+        time.sleep(60)
