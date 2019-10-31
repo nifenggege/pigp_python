@@ -3,11 +3,11 @@ import requests
 import re
 import urllib.request
 import time
-import os
 import sys
 import threading
 from queue import Queue
 import socket
+import os
 
 '''
 使用方式：
@@ -22,17 +22,15 @@ import socket
 查找Network-->All->找到该url请求，点击查找Headers-->Request--->Headers-->Cookie
 将Cookie中的SESSDATA项拷贝出来即可
 2. 该脚本默认下载该系列视频全局，可以通过构造Producer的时候传入[start_p, end_p]开始集数-终止集数，进行选集下载
-    eg: Product(video_id, name='product', start_p=29, end_p=29).start()
+    eg: product_download_info(video_id, has_done_list, start_p=29, end_p=29)
 3. 该脚本默认开启了9个消费者进行下载，如果自己的电脑性能搞，可以适当调整消费者的个数，在main函数的for循环中的range进行调整
     eg: for x in range(20):
 '''
 
 
-queue = Queue(100)
-titles = []
-total = 0
+down_load_records = {}
 lock = threading.Lock()
-socket.setdefaulttimeout(5) #默认下载30分钟，如果30分钟下载
+socket.setdefaulttimeout(5)
 
 headers = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/55.0.2883.87 Safari/537.36',
@@ -41,168 +39,190 @@ headers = {
 }
 
 
-class Product(threading.Thread):
+def product_download_info(aid, has_done_list, start_p=None, end_p=None):
+    videos = query_vedio_info(aid)
+    video_infos = []
+    for video in videos:
+        if start_p is not None and start_p > video['num']:
+            continue
+        if end_p is not None and end_p < video['num']:
+            break
 
-    def __init__(self, aid, start_p=None, end_p=None, *args, **kwargs):
-        super(Product, self).__init__(*args, **kwargs)
-        self.aid = aid
-        self.start_p = start_p
-        self.end_p = end_p
+        if has_done_list is not None and str(video['num']) in has_done_list:
+            continue
 
-    def run(self):
-        global total
-        videos = self.query_vedio_info(self.aid)
-        total = len(videos)
-        for video in videos:
-            #首先判断video是否在判断
-            if self.start_p is not None and self.start_p > video['num']:
-                continue
-            if self.end_p is not None and self.end_p < video['num']:
-                break
+        video_infos.append({
+            'title': build_order_pre(video['num']) + '_' + video['title'],
+            'ref': 'https://api.bilibili.com/x/web-interface/view?aid=%s/?p=%s' % (aid, video['num']),
+            'url': query_download_url(aid, video['cid']),
+            'aid': aid,
+            'num': video['num']
+        })
+        time.sleep(1)
+    return video_infos
 
-            download_url = self.query_download_url(self.aid, video['cid'])
-            pre_title = '00' + str(video['num']) \
-                if video['num'] < 10 else '0' + str(video['num']) \
-                if video['num'] < 100 else str(video['num'])
-            start_url = 'https://api.bilibili.com/x/web-interface/view?aid=%s/?p=%s' % (self.aid, video['num'])
-            print('生产者：%s, 开始生产: %s' % (threading.current_thread(), video['num']))
-            lock.acquire()
-            list.append(pre_title+'_'+video['title'])
-            lock.release()
-            queue.put({
-                'title': pre_title+'_'+video['title'],
-                'ref': start_url,
-                'url': download_url,
-                'aid': self.aid
-            })
-            time.sleep(1)
 
-    def query_vedio_info(self, aid):
-        url = 'https://api.bilibili.com/x/web-interface/view?aid=%s' % aid
-        resp = requests.get(url, headers=headers).json()
-        pages = resp['data']['pages']
-        result = []
-        for page in pages:
-            result.append(
-                {
-                    'cid': page['cid'],
-                    'title': re.sub(r'[\?\-（）\s？]', '', page['part']),
-                    'num': page['page']
-                }
-            )
-        return result
+def build_order_pre(num):
+    return '00' + str(num) \
+        if num < 10 else '0' + str(num) \
+        if num < 100 else str(num)
 
-    def query_download_url(self, aid, cid):
-        url = 'https://api.bilibili.com/x/player/playurl?avid=%s&cid=%s&qn=116' % (aid, cid)
-        resp = requests.get(url, headers=headers).json()
-        if len(resp['data']['durl']) > 1:
-            print('error download %s-%s' % (aid, cid))
-        return resp['data']['durl'][0]['url']
+
+def query_vedio_info(aid):
+    query_info_url = 'https://api.bilibili.com/x/web-interface/view?aid=%s' % aid
+    resp = requests.get(query_info_url, headers=headers).json()
+    pages = resp['data']['pages']
+    page_infos = []
+    for page in pages:
+        page_infos.append(
+            {
+                'cid': page['cid'],
+                'title': re.sub(r'[\?\-（）\s？]', '', page['part']),
+                'num': page['page']
+            }
+        )
+    return page_infos
+
+
+def query_download_url(aid, cid):
+    download_info_url = 'https://api.bilibili.com/x/player/playurl?avid=%s&cid=%s&qn=116' % (aid, cid)
+    resp = requests.get(download_info_url, headers=headers).json()
+    if len(resp['data']['durl']) > 1:
+        print('error download %s-%s' % (aid, cid))
+    return resp['data']['durl'][0]['url']
+
+
+def download_bilibili(url, title, start_url, aid, tag):
+
+    save_path = os.path.join(base_path, r'{}.flv'.format(title))
+    header = [
+        ('User-Agent', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.13; rv:56.0) Gecko/20100101 Firefox/56.0'),
+        ('Accept', '*/*'),
+        ('Accept-Language', 'en-US,en;q=0.5'),
+        ('Accept-Encoding', 'gzip, deflate, br'),
+        ('Range', 'bytes=0-'),  # Range 的值要为 bytes=0- 才能下载完整视频
+        ('Referer', start_url),  # 注意修改referer,必须要加的!
+        ('Origin', 'https://www.bilibili.com'),
+        ('Connection', 'keep-alive')
+    ]
+    DownloadTool(url, save_path, header, tag).down_video()
+
+
+def check_path_exist(save_path):
+    paths = os.path.split(save_path)
+    dir_path = paths[0]
+    if not os.path.exists(dir_path):
+        os.makedirs(dir_path)
+
+
+class DownloadTool(object):
+    #  下载视频
+    def __init__(self, down_load_url, save_path, header, tag):
+        self.down_load_url = down_load_url
+        self.save_path = save_path
+        self.header = header
+        self.tag = tag
+
+    def down_video(self):
+        opener = urllib.request.build_opener()
+        opener.addheaders = self.header
+        urllib.request.install_opener(opener)
+        check_path_exist(self.save_path)
+        urllib.request.urlretrieve(url=self.down_load_url, filename=self.save_path,
+                                   reporthook=self.report_process)
+
+    def report_process(self, blocknum, blocksize, totalsize):
+        percent = (blocknum * blocksize) / totalsize
+        #这里应该更新到一个全局变量中
+        down_load_records[self.tag] = percent
 
 
 class Consumer(threading.Thread):
-
-    start_time = time.time()
 
     def run(self):
         while True:
             record = None
             try:
-                record = queue.get(timeout=20)
+                record = queue.get(False)
             except Exception:
                 record = None
 
             if record is None:
-                print('消费者%s, 消费完成' % threading.current_thread())
+                print('consumer-%s, finish' % threading.current_thread().name)
                 break
 
             try:
-                self.start_time = time.time()
-                self.down_video(record['url'], record['title'], record['ref'], record['aid'])
-                print('消费者%s，下载视频P%s完成' % (threading.current_thread(), record['title']))
-                lock.acquire()
-                titles.remove(record['title'])
-                lock.release()
+                print('[consumer-%s，start download] P-%s' % (threading.current_thread().name, record['title']))
+                download_bilibili(record['url'], record['title'], record['ref'], record['aid'], record['num'])
+                print('[consumer-%s，finish download] P-%s' % (threading.current_thread().name, record['title']))
             except:
                 if record is not None:
                     queue.put(record)
-                print('counser %s error' % threading.current_thread())
+                print('consumer-%s error' % threading.current_thread())
 
-    def schedule_cmd(self, blocknum, blocksize, totalsize):
-        speed = (blocknum * blocksize) / (time.time() - self.start_time)
-        # speed_str = " Speed: %.2f" % speed
-        speed_str = " Speed: %s" % self.format_size(speed)
-        recv_size = blocknum * blocksize
 
-        # 设置下载进度条
-        f = sys.stdout
-        pervent = recv_size / totalsize
-        percent_str = "%.2f%%" % (pervent * 100)
-        n = round(pervent * 50)
-        s = ('#' * n).ljust(50, '-')
-        f.write(percent_str.ljust(8, ' ') + '[' + s + ']' + speed_str)
-        f.flush()
-        f.write('\r')
+def show_process():
 
-    # 字节bytes转化K\M\G
-    def format_size(self, bytes):
-        try:
-            bytes = float(bytes)
-            kb = bytes / 1024
-        except:
-            print("传入的字节格式不对")
-            return "Error"
-        if kb >= 1024:
-            M = kb / 1024
-            if M >= 1024:
-                G = M / 1024
-                return "%.3fG" % (G)
-            else:
-                return "%.3fM" % (M)
-        else:
-            return "%.3fK" % (kb)
+    fd = open(os.path.join(base_path, reocrod_file), 'a+', encoding='utf-8')
+    while True:
+        time.sleep(60)
+        sum = 0
+        for key in down_load_records:
+            sum += down_load_records[key]
+        percent = sum/len(down_load_records)
+        print("task download %.2f%%" % (percent*100))
 
-    #  下载视频
-    def down_video(self, video_url, title, start_url, aid):
-        print('[消费者%s, 正在下载%s段视频,请稍等...]:' % (threading.current_thread(), title))
-        currentVideoPath = os.path.join(sys.path[0], 'bilibili_video', str(aid))  # 当前目录作为下载目录
+        finish = list(map(lambda x: str(x), filter(lambda key: down_load_records[key] >= 1, down_load_records)))
+        if finish is not None and len(finish) > 0:
+            fd.write(",".join(finish))
+            fd.write(",")
+            fd.flush()
+            for x in finish:
+                down_load_records.pop(int(x))
 
-        opener = urllib.request.build_opener()
-        # 请求头
-        opener.addheaders = [
-            # ('Host', 'upos-hz-mirrorks3.acgvideo.com'),  #注意修改host,不用也行
-            ('User-Agent', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.13; rv:56.0) Gecko/20100101 Firefox/56.0'),
-            ('Accept', '*/*'),
-            ('Accept-Language', 'en-US,en;q=0.5'),
-            ('Accept-Encoding', 'gzip, deflate, br'),
-            ('Range', 'bytes=0-'),  # Range 的值要为 bytes=0- 才能下载完整视频
-            ('Referer', start_url),  # 注意修改referer,必须要加的!
-            ('Origin', 'https://www.bilibili.com'),
-            ('Connection', 'keep-alive')
-        ]
-        urllib.request.install_opener(opener)
-        # 创建文件夹存放下载的视频
-        if not os.path.exists(currentVideoPath):
-            os.makedirs(currentVideoPath)
-        urllib.request.urlretrieve(url=video_url, filename=os.path.join(currentVideoPath, r'{}.flv'.format(title)),
-                                   reporthook=self.schedule_cmd)  # 写成mp4也行  title + '-' + num + '.flv'
+        if down_load_records is None or len(down_load_records) == 0:
+            print('====tash has done!!!====')
+            break
+        if percent > 0.7:
+            print('un finish : %s' % down_load_records.keys())
+    fd.close()
+
+
+def query_has_done():
+
+    file_path = os.path.join(base_path, reocrod_file)
+    if not os.path.exists(file_path):
+        return None
+
+    with open(file_path, 'r', encoding='utf-8') as fp:
+        has_done = fp.readline().split(",")
+        return list(filter(lambda key: key is not None and key.strip() != '', has_done))
 
 
 if __name__ == '__main__':
 
-    url = 'https://www.bilibili.com/video/av39126512?from=search&seid=15034860517630283296' #输入要播放的视频
+    url = 'https://www.bilibili.com/video/av68944703?from=search&seid=692911260504189283' #输入要播放的视频
+
+    print('start parse url')
     video_id = re.search(r'av(.*?)\D', url).group(1)
-    Product(video_id, name='product', start_p=17, end_p=17).start()
-    for x in range(10):
+    base_path = os.path.join(sys.path[0], 'bilibili_video', video_id)
+    reocrod_file = 'record'
+    check_path_exist(base_path)
+    print('start parse donwload url')
+    has_done_list = query_has_done()
+
+    download_infos = product_download_info(video_id, has_done_list)
+    print('donwload url is %s' % download_infos)
+
+    totals = len(download_infos)
+    queue = Queue(totals)
+    for info in download_infos:
+        down_load_records[info['num']] = 0
+        queue.put(info)
+    print('queue info is %s' % queue.qsize())
+
+    #启动消费者进行消费
+    for x in range(5):
         Consumer(name='consumer_'+str(x)).start()
 
-    while True:
-        if len(titles) == 0:
-            print("下载任务完成")
-            break
-        precent = (total-len(titles))/total
-        print("下载进度：%.2f%%" % (precent*100))
-
-        if precent > 0.7 :
-            print("正在下载视频：%s", ' '.join(titles))
-        time.sleep(60)
+    show_process()
