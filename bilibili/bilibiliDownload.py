@@ -92,7 +92,7 @@ def query_download_url(aid, cid):
     return resp['data']['durl'][0]['url']
 
 
-def download_bilibili(url, title, start_url, aid, tag):
+def download_bilibili(url, title, start_url, tag):
 
     save_path = os.path.join(base_path, r'{}.flv'.format(title))
     header = [
@@ -153,7 +153,7 @@ class Consumer(threading.Thread):
 
             try:
                 print('[consumer-%s，start download] P-%s' % (threading.current_thread().name, record['title']))
-                download_bilibili(record['url'], record['title'], record['ref'], record['aid'], record['num'])
+                download_bilibili(record['url'], record['title'], record['ref'], record['num'])
                 print('[consumer-%s，finish download] P-%s' % (threading.current_thread().name, record['title']))
             except:
                 if record is not None:
