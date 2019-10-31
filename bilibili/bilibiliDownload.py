@@ -202,7 +202,6 @@ def query_has_done():
 if __name__ == '__main__':
 
     url = 'https://www.bilibili.com/video/av68944703?from=search&seid=692911260504189283' #输入要播放的视频
-
     print('start parse url')
     video_id = re.search(r'av(.*?)\D', url).group(1)
     base_path = os.path.join(sys.path[0], 'bilibili_video', video_id)
@@ -212,7 +211,7 @@ if __name__ == '__main__':
     has_done_list = query_has_done()
 
     download_infos = product_download_info(video_id, has_done_list)
-    print('donwload url is %s' % download_infos)
+    #print('donwload url is %s' % download_infos)
 
     totals = len(download_infos)
     queue = Queue(totals)
