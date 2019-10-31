@@ -158,7 +158,7 @@ class Consumer(threading.Thread):
             except:
                 if record is not None:
                     queue.put(record)
-                print('consumer-%s error' % threading.current_thread())
+                print('consumer-%s error' % threading.current_thread().name)
 
 
 def show_process():
