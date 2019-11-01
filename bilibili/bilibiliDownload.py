@@ -8,6 +8,7 @@ import threading
 from queue import Queue
 import socket
 import os
+from lxml import etree
 
 '''
 使用方式：
@@ -163,7 +164,7 @@ class Consumer(threading.Thread):
 
 def show_process():
 
-    fd = open(os.path.join(base_path, reocrod_file), 'a+', encoding='utf-8')
+    fd = open(os.path.join(base_path, record_file), 'a+', encoding='utf-8')
     while True:
         time.sleep(60)
         sum = 0
@@ -190,7 +191,7 @@ def show_process():
 
 def query_has_done():
 
-    file_path = os.path.join(base_path, reocrod_file)
+    file_path = os.path.join(base_path, record_file)
     if not os.path.exists(file_path):
         return None
 
@@ -199,14 +200,25 @@ def query_has_done():
         return list(filter(lambda key: key is not None and key.strip() != '', has_done))
 
 
+def query_video_name(url):
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/55.0.2883.87 Safari/537.36',
+    }
+    response = requests.get(url, headers=headers)
+    html = etree.HTML(response.text)
+    return html.xpath('//span[@class="tit"]/text()')[0]
+
+
 if __name__ == '__main__':
 
-    url = 'https://www.bilibili.com/video/av68944703?from=search&seid=692911260504189283' #输入要播放的视频
-    print('start parse url')
+    url = 'https://www.bilibili.com/video/av35928275/?p=1' #输入要播放的视频
+    video_name = query_video_name(url)
     video_id = re.search(r'av(.*?)\D', url).group(1)
-    base_path = os.path.join(sys.path[0], 'bilibili_video', video_id)
-    reocrod_file = 'record'
-    check_path_exist(base_path)
+    vide_name = video_id if video_name is None else video_name
+    print('start parse url , veido name is %s' % video_name)
+    base_path = os.path.join(sys.path[0], 'bilibili_video', video_name)
+    record_file = 'record'
+    check_path_exist(os.path.join(base_path, record_file))
     print('start parse donwload url')
     has_done_list = query_has_done()
 
