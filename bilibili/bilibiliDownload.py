@@ -165,13 +165,14 @@ class Consumer(threading.Thread):
 def show_process():
 
     fd = open(os.path.join(base_path, record_file), 'a+', encoding='utf-8')
+    done_count = 0
     while True:
         time.sleep(60)
         sum = 0
         for key in down_load_records:
             sum += down_load_records[key]
-        percent = sum/len(down_load_records)
-        print("task download %.2f%%" % (percent*100))
+        percent = (sum+done_count)/(len(down_load_records)+done_count)
+        print("has done %s/%s, task download %.2f%%" % (done_count, (len(down_load_records)+done_count), (percent*100)))
 
         finish = list(map(lambda x: str(x), filter(lambda key: down_load_records[key] >= 1, down_load_records)))
         if finish is not None and len(finish) > 0:
@@ -181,6 +182,8 @@ def show_process():
             for x in finish:
                 down_load_records.pop(int(x))
 
+        if finish is not None:
+            done_count += len(finish)
         if down_load_records is None or len(down_load_records) == 0:
             print('====tash has done!!!====')
             break
