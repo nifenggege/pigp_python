@@ -95,7 +95,7 @@ def check_path_exist(save_path):
 if __name__ == '__main__':
     cid = '180'
     start_index = 0
-    end_index = 5
+    end_index = 100000
     base_path = os.path.join(sys.path[0], 'bilibili_video', cid)
     check_path_exist(os.path.join(base_path, cid))
     articles = parse_column(cid)
