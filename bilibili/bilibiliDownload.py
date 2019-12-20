@@ -36,7 +36,7 @@ socket.setdefaulttimeout(5)
 headers = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/55.0.2883.87 Safari/537.36',
     'Host': 'api.bilibili.com',
-    'Cookie': 'SESSDATA=c0c48f36%2C1573134751%2Ce21a47a1' #不添加该cookie只能下载顺畅视频
+    'Cookie': 'SESSDATA=f25c2928%2C1579006534%2Cbd6e54c1' #不添加该cookie只能下载顺畅视频
 }
 
 
@@ -209,17 +209,17 @@ def query_video_name(url):
     }
     response = requests.get(url, headers=headers)
     html = etree.HTML(response.text)
-    return html.xpath('//span[@class="tit"]/text()')[0]
+    return html.xpath('//span[@class="tit tr-fix"]/text()')[0]
 
 
 if __name__ == '__main__':
 
-    url = 'https://www.bilibili.com/video/av57591340?from=search&seid=10477641346968902964' #输入要播放的视频
+    url = 'https://www.bilibili.com/video/av50245239?from=search&seid=12892356883253737900' #输入要播放的视频
     video_name = query_video_name(url)
     video_id = re.search(r'av(.*?)\D', url).group(1)
     vide_name = video_id if video_name is None else video_name
     print('start parse url , veido name is %s' % video_name)
-    base_path = os.path.join(sys.path[0], 'bilibili_video', video_name)
+    base_path = os.path.join(sys.path[0], 'bilibili_video', re.sub(r'\|', '_', video_name))
     record_file = 'record'
     check_path_exist(os.path.join(base_path, record_file))
     print('start parse donwload url')
