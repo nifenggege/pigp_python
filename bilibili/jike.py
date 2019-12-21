@@ -6,6 +6,10 @@ import re
 from urllib import request
 import socket
 
+'''
+下载文章，下载评论，拼接在一起
+下载文章音频
+'''
 url = 'https://time.geekbang.org/serv/v1/article'
 comment_url = 'https://time.geekbang.org/serv/v1/comments'
 articles_url = 'https://time.geekbang.org/serv/v1/column/articles'
@@ -85,6 +89,7 @@ def parse_column(cid):
         })
     return articles
 
+
 def check_path_exist(save_path):
     paths = os.path.split(save_path)
     dir_path = paths[0]
@@ -107,7 +112,7 @@ if __name__ == '__main__':
             continue
 
         if index > end_index:
-            break;
+            break
         print('开始处理：', str(index), "/", str(len(articles)), article['title'])
         content = parse_article(article)
         pre = str(index) if index>=100 else '0'+str(index) if index>=10 else '00'+str(index)
