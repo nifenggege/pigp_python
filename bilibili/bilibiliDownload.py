@@ -214,7 +214,7 @@ def query_video_name(url):
 
 if __name__ == '__main__':
 
-    url = 'https://www.bilibili.com/video/av50245239?from=search&seid=12892356883253737900' #输入要播放的视频
+    url = 'https://www.bilibili.com/video/av34440102?from=search&seid=8116362391117674397' #输入要播放的视频
     video_name = query_video_name(url)
     video_id = re.search(r'av(.*?)\D', url).group(1)
     vide_name = video_id if video_name is None else video_name
