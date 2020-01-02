@@ -26,7 +26,17 @@ def process_file(f):
             continue
         people = {}
         for index, item in enumerate(items):
-            people[item] = table.cell(row, index).value
+            value = table.cell(row, index).value
+
+            if value is None or (
+                    type(value) == str and len(value.strip()) <= 0
+            ):
+                value = 0.0
+
+            if '姓名'==item or '身份证号'==item or '工资月份'==item:
+                people[item] = str(value)
+            else:
+                people[item] = float(value)
 
         id_card = people['身份证号']
         if id_card in peoples:
@@ -41,7 +51,7 @@ def process_file(f):
 
 
 def sort_key(elem):
-    return elem['工资\n月份']
+    return elem['工资月份']
 
 
 def build_all_info(data):
@@ -60,7 +70,7 @@ def build_all_info(data):
         for people in people_info:
             temp['name'] = people['姓名']
             temp['id_card'] = people['身份证号']
-            temp[people['工资\n月份']] = people['应发合计']
+            temp[people['工资月份']] = people['应发合计']
         total_value = 0
         for token in temp.keys():
             if token == 'name' or token == 'id_card':
